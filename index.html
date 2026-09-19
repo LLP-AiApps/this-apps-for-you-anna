@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>This App’s For You — Happy birthday, Anna</title>
+<meta name="description" content="Happy birthday, Anna. You take the people. Luigi takes the bags.">
+<style>
+  :root { --bg:#1b1420; --fg:#f3ead2; --muted:#b7ab96; --subtle:#8a7d70; --surface:#261c2a; --elev:#322436; --accent:#8b2e4a; --border:rgba(243,234,210,.14); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { min-height: 100%; background: var(--bg); color: var(--fg); font-family: Georgia, "Times New Roman", serif; }
+  button { cursor: pointer; font: inherit; color: inherit; }
+  #card { min-height: 100dvh; max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+  .kicker { font-family: system-ui, sans-serif; font-size: .7rem; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(2.2rem, 8vw, 3.6rem); line-height: 1.05; font-weight: 500; margin: .7rem 0 1rem; }
+  .lede { color: var(--muted); line-height: 1.5; font-size: 1.05rem; max-width: 34rem; }
+  .tag { margin: .85rem 0 1.75rem; font-size: 1.25rem; }
+  .shots h2 { font-family: system-ui, sans-serif; font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .shots p { color: var(--subtle); font-size: .85rem; margin: .35rem 0 1rem; font-family: system-ui, sans-serif; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+  @media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  .polaroid { position: relative; border: 1px solid var(--border); background: var(--elev); padding: .5rem; border-radius: 12px; }
+  .polaroid img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 4px; display: block; }
+  .polaroid input { width: 100%; margin-top: .45rem; height: 2.4rem; border: 1px solid var(--border); background: var(--surface); color: var(--fg); border-radius: 4px; padding: 0 .5rem; font-size: .75rem; font-family: system-ui, sans-serif; }
+  .polaroid .rm { position: absolute; top: .7rem; right: .7rem; width: 2rem; height: 2rem; border: 0; border-radius: 4px; background: rgba(27,20,32,.8); color: var(--fg); }
+  .add { aspect-ratio: 4/5; width: 100%; border: 1px dashed var(--border); background: var(--surface); border-radius: 12px; color: var(--muted); font-family: system-ui, sans-serif; font-size: .85rem; }
+  .cta { margin-top: 1.75rem; width: 100%; height: 3.5rem; border: 0; border-radius: 12px; background: var(--fg); color: var(--bg); font-weight: 600; font-family: system-ui, sans-serif; }
+  .note { margin-top: 1rem; text-align: center; color: var(--subtle); font-size: .75rem; font-family: system-ui, sans-serif; }
+  #game { display: none; min-height: 100dvh; padding: .75rem; }
+  #game.on { display: flex; flex-direction: column; align-items: center; gap: .5rem; }
+  canvas { width: min(960px, 100%); height: auto; background: #14301c; border-radius: 12px; border: 1px solid var(--border); touch-action: none; }
+  .hud { width: min(960px, 100%); display: flex; justify-content: space-between; font-family: system-ui, sans-serif; font-size: .8rem; color: var(--muted); }
+  .pads { display: none; width: min(960px, 100%); grid-template-columns: repeat(4, 1fr); gap: .5rem; }
+  @media (max-width: 800px) { .pads { display: grid; } }
+  .pads button { height: 3.4rem; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; font-family: system-ui, sans-serif; font-size: .75rem; }
+  .lesson { font-size: .95rem; color: var(--fg); text-align: center; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<div id="card">
+  <p class="kicker">September 19</p>
+  <h1>This App’s For You</h1>
+  <p class="lede">Happy birthday, Anna. For the woman who still answers at 3 a.m. — UNLV, soccer, Italy, wine, the missed train, the hill, the closed door you already knew a way around.</p>
+  <p class="tag">You take the people. Luigi takes the bags.</p>
+  <div class="shots">
+    <h2>Your shots</h2>
+    <p>Italy, the villa, the wine. Add them here. They stay on this phone.</p>
+    <div class="grid" id="grid"></div>
+  </div>
+  <input id="file" type="file" accept="image/*" multiple hidden>
+  <button class="cta" type="button" id="open">Open your game</button>
+  <p class="note">From Jerime · Hold D to walk · Luigi waits until you press E</p>
+</div>
+<div id="game">
+  <div class="hud"><span>Travel with Anna</span><button type="button" id="back" style="border:0;background:none;color:var(--muted)">The card</button></div>
+  <p class="lesson" id="lesson">Hold D to walk right. Stop at Luigi. Press E — he takes the bags.</p>
+  <canvas id="c" width="960" height="540"></canvas>
+  <div class="pads">
+    <button type="button" data-k="left">Left</button>
+    <button type="button" data-k="right">Right</button>
+    <button type="button" data-k="jump">Jump</button>
+    <button type="button" data-k="act">Luigi</button>
+  </div>
+</div>
+<script>
+const KEY = "anna-shots-v1";
+const MAX = 8;
+const file = document.getElementById("file");
+const grid = document.getElementById("grid");
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } }
+function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} }
+let shots = load();
+function compress(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 900, sc = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = rej; img.src = url;
+  });
+}
+function renderShots() {
+  grid.innerHTML = "";
+  shots.forEach((s, i) => {
+    const el = document.createElement("div");
+    el.className = "polaroid";
+    el.innerHTML = `<img alt="" src="${s.src}"><input placeholder="Where was this?" value="${(s.caption||"").replace(/"/g,"")}">`;
+    const rm = document.createElement("button");
+    rm.className = "rm"; rm.type = "button"; rm.textContent = "×";
+    rm.onclick = () => { shots.splice(i, 1); save(shots); renderShots(); };
+    el.querySelector("input").oninput = (e) => { shots[i].caption = e.target.value.slice(0,48); save(shots); };
+    el.appendChild(rm); grid.appendChild(el);
+  });
+  if (shots.length < MAX) {
+    const add = document.createElement("button");
+    add.className = "add"; add.type = "button"; add.textContent = "+ Add a shot";
+    add.onclick = () => file.click();
+    grid.appendChild(add);
+  }
+}
+file.onchange = async (e) => {
+  for (const f of [...e.target.files]) {
+    if (shots.length >= MAX || !f.type.startsWith("image/")) continue;
+    shots.push({ src: await compress(f), caption: "" });
+  }
+  save(shots); renderShots(); file.value = "";
+};
+renderShots();
+
+document.getElementById("open").onclick = () => {
+  document.getElementById("card").style.display = "none";
+  document.getElementById("game").classList.add("on");
+  startGame();
+};
+document.getElementById("back").onclick = () => location.reload();
+
+function startGame() {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const lesson = document.getElementById("lesson");
+  const W = 960, H = 540, FIXED = 1/60;
+  const GRAV = 1800, JUMP = -380, MAXSPD = 115, ACC = 1100, FRIC = 1400, LSPD = 88, LCARRY = 64;
+  const keys = {};
+  const touch = {};
+  addEventListener("keydown", e => { keys[e.code] = true; if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault(); });
+  addEventListener("keyup", e => { keys[e.code] = false; });
+  document.querySelectorAll(".pads button").forEach(b => {
+    const k = b.dataset.k;
+    b.onpointerdown = ev => { ev.preventDefault(); b.setPointerCapture(ev.pointerId); touch[k] = true; };
+    b.onpointerup = () => { touch[k] = false; };
+    b.onpointercancel = () => { touch[k] = false; };
+  });
+  const plats = [{x:0,y:500,w:520,h:40},{x:600,y:500,w:180,h:40},{x:860,y:500,w:820,h:40}];
+  const pits = [{x:522,y:516,w:76,h:24},{x:782,y:516,w:76,h:24}];
+  function actor(x,y){ return {x,y,w:18,h:34,vx:0,vy:0,g:false,j:0,face:1}; }
+  const P = actor(40,420);
+  const L = Object.assign(actor(300,420), {mode:"stay", carrying:false, line:"When you are ready, I take the bags.", lineT:6});
+  const guests = [actor(92,432), actor(124,432)];
+  const bags = [{x:318,y:478,w:16,h:14,held:false,done:false},{x:340,y:478,w:16,h:14,held:false,done:false}];
+  const van = {x:1280,y:464,w:76,h:36};
+  const goal = {x:1540,y:452};
+  let cam = 0, msg = "The Frecciarossa left. Luigi takes the luggage. You take the people.", msgT = 4.5, actEdge = false, jumpEdge = false, prevJ = false, prevE = false, won = false;
+  function aabb(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+  function solidAt(box, fromAbove){
+    for (const p of plats) if (aabb(box,p) && fromAbove) return p;
+    return null;
+  }
+  function move(ent, left, right, jump, maxSpd){
+    const acc = ent.g ? ACC : 700;
+    if (left) { ent.vx -= acc*FIXED; ent.face = -1; }
+    if (right) { ent.vx += acc*FIXED; ent.face = 1; }
+    if (!left && !right && ent.g) ent.vx += -Math.sign(ent.vx)*Math.min(Math.abs(ent.vx), FRIC*FIXED);
+    ent.vx = Math.max(-maxSpd, Math.min(maxSpd, ent.vx));
+    ent.x += ent.vx * FIXED;
+    const wasG = ent.g; ent.g = false;
+    if (jump && (wasG || ent.j>0)) { ent.vy = JUMP; ent.g = false; ent.j -= 1; }
+    ent.vy += GRAV * FIXED;
+    ent.vy = Math.min(560, ent.vy);
+    ent.y += ent.vy * FIXED;
+    const feet = {x:ent.x, y:ent.y+ent.h-4, w:ent.w, h:6};
+    const hit = solidAt(feet, ent.vy>=0);
+    if (hit && ent.y + ent.h > hit.y && ent.y + ent.h < hit.y + 24) {
+      ent.y = hit.y - ent.h; ent.vy = 0; ent.g = true; ent.j = 2;
+    }
+    if (ent.y > 640) { ent.x = 40; ent.y = 420; ent.vx = 0; ent.vy = 0; msg = "The sidewalk is still there."; msgT = 2; }
+  }
+  function dist(a,b){ return Math.abs(a.x-b.x); }
+  let last = performance.now(), accu = 0;
+  function loop(now){
+    accu += Math.min(0.05, (now-last)/1000); last = now;
+    while (accu >= FIXED) { step(); accu -= FIXED; }
+    draw(); requestAnimationFrame(loop);
+  }
+  function step(){
+    const left = keys.ArrowLeft || keys.KeyA || touch.left;
+    const right = keys.ArrowRight || keys.KeyD || touch.right;
+    const jumpHeld = keys.ArrowUp || keys.KeyW || keys.Space || touch.jump;
+    const jump = jumpHeld && !prevJ; prevJ = !!jumpHeld;
+    const eHeld = keys.KeyE || keys.Enter || touch.act;
+    const act = eHeld && !prevE; prevE = !!eHeld;
+    move(P, left, right, jump, MAXSPD);
+    if (act && dist(P,L)<100 && bags.some(b=>!b.held&&!b.done)) {
+      bags.forEach(b => { if(!b.done) b.held = true; });
+      L.carrying = true; L.mode = "carry"; L.line = "I have the bags."; L.lineT = 2.4;
+    }
+    let t = P.x - P.face*54;
+    if (L.mode === "stay") t = 300;
+    if (L.carrying) t = van.x;
+    const dx = t - L.x;
+    move(L, dx<-12, dx>12, false, L.carrying ? LCARRY : LSPD);
+    if (L.carrying) {
+      bags.forEach(b => { if(b.held){ b.x=L.x+12; b.y=L.y+12; } });
+      if (dist(L, van)<40) { bags.forEach(b=>{b.held=false;b.done=true;b.x=van.x+10;b.y=van.y+20;}); L.carrying=false; L.mode="follow"; L.line="Bags are with the stay."; L.lineT=2; }
+    }
+    guests.forEach((g,i) => {
+      const tx = P.x - 50 - i*28;
+      move(g, g.x>tx+10, g.x<tx-10, false, 95);
+    });
+    if (!won && Math.abs(P.x-goal.x)<30 && guests.every(g=>Math.abs(g.x-goal.x)<220) && bags.every(b=>b.done)) {
+      won = true; msg = "Guests and bags. Both. Happy birthday, Anna."; msgT = 8;
+    }
+    msgT = Math.max(0, msgT-FIXED); L.lineT = Math.max(0, L.lineT-FIXED);
+    const held = bags.some(b=>b.held);
+    if (!bags.every(b=>b.done) && !held) lesson.textContent = "Hold D to walk right. Stop at Luigi. Press E — he takes the bags.";
+    else if (held) lesson.textContent = "You walk the guests. He walks the bags. Keep going right.";
+    else lesson.textContent = "Everyone to the Italian flag. Bags and people both.";
+    cam += (P.x - 280 - cam)*0.08;
+  }
+  function person(a, body, vest){
+    const x = a.x-cam+a.w/2, y=a.y;
+    ctx.fillStyle = body; ctx.fillRect(x-8,y+12,16,a.h-18);
+    if (vest) { ctx.fillStyle = vest; ctx.fillRect(x-8,y+13,16,10); }
+    ctx.fillStyle = "#e6c4a0"; ctx.fillRect(x-7,y,14,13);
+    ctx.fillStyle = "#3a2418"; ctx.fillRect(x-8,y-4,16,8);
+  }
+  function draw(){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"#14301c"); g.addColorStop(1,"#c4b060");
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = "#3a2a14";
+    plats.forEach(p => ctx.fillRect(p.x-cam, p.y, p.w, p.h));
+    ctx.fillStyle = "#1b1420";
+    pits.forEach(p => ctx.fillRect(p.x-cam, p.y, p.w, p.h));
+    ctx.fillStyle = "#8b2e4a"; ctx.fillRect(van.x-cam, van.y, van.w, van.h);
+    ctx.fillStyle = "#f3ead2"; ctx.font = "11px system-ui"; ctx.fillText("VAN", van.x-cam+22, van.y+22);
+    ctx.fillStyle = "#3a2a20"; ctx.fillRect(goal.x-cam, goal.y-48, 4, 48);
+    ctx.fillStyle = "#2f4a38"; ctx.fillRect(goal.x-cam+4, goal.y-48, 22, 14);
+    ctx.fillStyle = "#f3ead2"; ctx.fillRect(goal.x-cam+12, goal.y-48, 8, 14);
+    ctx.fillStyle = "#8b2e4a"; ctx.fillRect(goal.x-cam+20, goal.y-48, 8, 14);
+    bags.forEach(b => { ctx.fillStyle="#4a3020"; ctx.fillRect(b.x-cam,b.y,b.w,b.h); });
+    guests.forEach(g => person(g, "#3d5a4a"));
+    person(L, "#f3ead2", "#8b2e4a");
+    person(P, "#7a1f3d");
+    if (L.lineT>0) {
+      ctx.fillStyle = "rgba(27,20,32,.85)";
+      ctx.fillRect(L.x-cam-10, L.y-28, 160, 18);
+      ctx.fillStyle = "#f3ead2"; ctx.font = "12px Georgia"; ctx.fillText(L.line, L.x-cam, L.y-15);
+    }
+    if (msgT>0) {
+      ctx.fillStyle = "rgba(27,20,32,.8)";
+      ctx.fillRect(W/2-240, 16, 480, 28);
+      ctx.fillStyle = "#f3ead2"; ctx.textAlign="center"; ctx.font="14px Georgia";
+      ctx.fillText(msg, W/2, 35); ctx.textAlign="left";
+    }
+  }
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
